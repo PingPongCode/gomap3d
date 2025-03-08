@@ -39,7 +39,7 @@ package main
 import (
 	"fmt"
 	"time"
-	"github.com/yourusername/gomap3d"
+	"github.com/PingPongCode/gomap3d"
 )
 
 func main() {
