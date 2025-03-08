@@ -1,0 +1,150 @@
+# gomap3d
+
+Go语言实现的多坐标系转换库，支持天文学/航天领域常用坐标系转换
+
+## 特性
+
+- 支持7种坐标系互转：
+
+  - 站心坐标系 (AER)
+  - 东北天坐标系 (ENU)
+  - 地心地固坐标系 (ECEF)
+  - 地心惯性坐标系 (ECI)
+  - 大地坐标系 (WGS84)
+- 支持多种参考椭球体：
+
+  - WGS-84
+  - CGCS2000
+  - 月球
+  - 火星
+- 精确天文计算：
+
+  - 儒略日计算
+  - 格林威治恒星时
+  - ECI/ECEF时变转换
+
+## 安装
+
+```bash
+go get github.com/PingPongCode/gomap3d
+```
+
+## 使用示例
+
+### 基本转换
+
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+	"github.com/yourusername/gomap3d"
+)
+
+func main() {
+	// 创建WGS84椭球体
+	ell, _ := gomap3d.NewEllipsoid("wgs84")
+
+	// 大地坐标（北京）
+	beijing := gomap3d.Geodetic{
+		Latitude:  39.9042, 
+		Longitude: 116.4074,
+		Altitude:  43.5,
+		Ell:       ell,
+	}
+
+	// 转换为ECEF
+	ecef := beijing.ToECEF()
+	fmt.Printf("ECEF坐标: %.2f, %.2f, %.2f\n", ecef.X, ecef.Y, ecef.Z)
+
+	// 转换为ENU（以上海为参考点）
+	shanghai := gomap3d.Geodetic{
+		Latitude:  31.2304,
+		Longitude: 121.4737,
+		Altitude:  4.0,
+		Ell:       ell,
+	}
+	enu := beijing.ToENU(shanghai)
+	fmt.Printf("ENU坐标: 东%.2fm, 北%.2fm, 上%.2fm\n", enu.East, enu.North, enu.Up)
+
+	// 时间相关转换（ECI）
+	t := time.Date(2023, 6, 15, 12, 0, 0, 0, time.UTC)
+	eci := ecef.ToECI(t)
+	fmt.Printf("ECI坐标: %.2f, %.2f, %.2f\n", eci.X, eci.Y, eci.Z)
+}
+```
+
+### 坐标链转换
+
+```go
+// AER -> ENU -> ECEF -> Geodetic
+aer := gomap3d.AER{
+	Azimuth:   45.0,
+	Elevation: 30.0,
+	SRange:    1000.0,
+	Ell:       ell,
+}
+
+enu := aer.ToENU()
+ecef := enu.ToECEF(shanghai)
+geo := ecef.ToGeodetic()
+
+fmt.Printf("转换结果: 纬度%.4f°, 经度%.4f°, 高度%.1fm", 
+	geo.Latitude, geo.Longitude, geo.Altitude)
+```
+
+## 基本函数
+
+基本函数见base.go,参考pymap3d编写
+
+```go
+// ENU2AER 将ENU坐标转换为方位角、仰角和斜距
+func ENU2AER(e, n, u float64) (az, el, srange float64){}
+
+// AER2ENU 将方位角、仰角和斜距转换为ENU坐标
+func AER2ENU(az, el, srange float64) (e, n, u float64) {}
+
+// Geodetic2ECEF 将地理坐标转换为ECEF坐标
+func Geodetic2ECEF(lat, lon, alt float64, ell *Ellipsoid) (x, y, z float64) {}
+
+// ECEF2Geodetic 将ECEF坐标转换为地理坐标
+func ECEF2Geodetic(x, y, z float64, ell *Ellipsoid) (lat, lon, alt float64) {}
+
+// 天文计算相关函数
+// juliandate 计算给定时间的儒略日
+func juliandate(t time.Time) float64 {}
+
+// greenwichsrt 计算格林威治恒星时（弧度）
+func greenwichsrt(jd float64) float64 {}
+
+// rotationMatrix3 生成绕Z轴旋转x弧度的矩阵
+func rotationMatrix3(x float64) [3][3]float64 {}
+
+// multiplyMatrixVector 矩阵乘以向量
+func multiplyMatrixVector(matrix [3][3]float64, vector [3]float64) [3]float64 {}
+
+// ECI2ECEF 将ECI坐标转换为ECEF坐标
+func ECI2ECEF(x, y, z float64, t time.Time) (xEcef, yEcef, zEcef float64) {}
+
+// ECEF2ECI 将ECEF坐标转换为ECI坐标
+func ECEF2ECI(x, y, z float64, t time.Time) (xEci, yEci, zEci float64) {}
+
+// ECEF2ENU 将ECEF坐标转换为ENU坐标
+func ECEF2ENU(x, y, z, lat0, lon0, h0 float64, ell *Ellipsoid) (e, n, u float64) {}
+
+// ENU2ECEF 将ENU坐标转换为ECEF坐标
+func ENU2ECEF(e, n, u, lat0, lon0, h0 float64, ell *Ellipsoid) (x, y, z float64) {}
+```
+
+## 贡献
+
+欢迎提交Issue和PR。提交代码前请确保：
+
+1. 通过所有测试 `go test -v ./...`
+2. 添加新功能的测试用例
+3. 更新相关文档
+
+## 许可证
+
+MIT License
