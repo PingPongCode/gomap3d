@@ -9,11 +9,19 @@ import (
 
 // ENU2AER 将ENU坐标转换为方位角、仰角和斜距
 func ENU2AER(e, n, u float64) (az, el, srange float64) {
+	if math.Abs(e) < 1e-3 {
+		e = 0
+	}
+	if math.Abs(n) < 1e-3 {
+		n = 0
+	}
+	if math.Abs(u) < 1e-3 {
+		u = 0
+	}
 	r := math.Hypot(e, n)
 	srange = math.Hypot(r, u)
-	el = math.Atan2(u, r) / math.Pi * 180
-	tau := 2 * math.Pi
-	az = math.Mod(math.Atan2(e, n), tau) / math.Pi * 180
+	el = math.Atan2(u, r) * 180 / math.Pi
+	az = math.Mod(math.Atan2(e, n)*180/math.Pi+360, 360)
 	return
 }
 
@@ -74,65 +82,6 @@ func ECEF2Geodetic(x, y, z float64, ell *Ellipsoid) (lat, lon, alt float64) {
 	return
 }
 
-// 天文计算相关函数
-// juliandate 计算给定时间的儒略日
-func juliandate(t time.Time) float64 {
-	j2000 := time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)
-	duration := t.Sub(j2000)
-	days := duration.Seconds() / 86400.0
-	return 2451545.0 + days
-}
-
-// greenwichsrt 计算格林威治恒星时（弧度）
-func greenwichsrt(jd float64) float64 {
-	T := (jd - 2451545.0) / 36525.0
-	theta := 280.46061837 + 360.98564736629*(jd-2451545.0) + 0.000387933*T*T - (T*T*T)/38710000.0
-	theta = math.Mod(theta, 360.0)
-	if theta < 0 {
-		theta += 360.0
-	}
-	return theta * math.Pi / 180.0
-}
-
-// rotationMatrix3 生成绕Z轴旋转x弧度的矩阵
-func rotationMatrix3(x float64) [3][3]float64 {
-	cosX := math.Cos(x)
-	sinX := math.Sin(x)
-	return [3][3]float64{
-		{cosX, sinX, 0},
-		{-sinX, cosX, 0},
-		{0, 0, 1},
-	}
-}
-
-// multiplyMatrixVector 矩阵乘以向量
-func multiplyMatrixVector(matrix [3][3]float64, vector [3]float64) [3]float64 {
-	x := matrix[0][0]*vector[0] + matrix[0][1]*vector[1] + matrix[0][2]*vector[2]
-	y := matrix[1][0]*vector[0] + matrix[1][1]*vector[1] + matrix[1][2]*vector[2]
-	z := matrix[2][0]*vector[0] + matrix[2][1]*vector[1] + matrix[2][2]*vector[2]
-	return [3]float64{x, y, z}
-}
-
-// ECI2ECEF 将ECI坐标转换为ECEF坐标
-func ECI2ECEF(x, y, z float64, t time.Time) (xEcef, yEcef, zEcef float64) {
-	jd := juliandate(t)
-	gst := greenwichsrt(jd)
-	matrix := rotationMatrix3(gst)
-	vec := [3]float64{x, y, z}
-	result := multiplyMatrixVector(matrix, vec)
-	return result[0], result[1], result[2]
-}
-
-// ECEF2ECI 将ECEF坐标转换为ECI坐标
-func ECEF2ECI(x, y, z float64, t time.Time) (xEci, yEci, zEci float64) {
-	jd := juliandate(t)
-	gst := greenwichsrt(jd)
-	matrix := rotationMatrix3(-gst) // 使用逆旋转
-	vec := [3]float64{x, y, z}
-	result := multiplyMatrixVector(matrix, vec)
-	return result[0], result[1], result[2]
-}
-
 // ECEF2ENU 将ECEF坐标转换为ENU坐标
 func ECEF2ENU(x, y, z, lat0, lon0, h0 float64, ell *Ellipsoid) (e, n, u float64) {
 	// 转换为本地ENU坐标
@@ -172,4 +121,87 @@ func ENU2ECEF(e, n, u, lat0, lon0, h0 float64, ell *Ellipsoid) (x, y, z float64)
 
 	x0, y0, z0 := Geodetic2ECEF(lat0, lon0, h0, ell)
 	return x0 + dx, y0 + dy, z0 + dz
+}
+
+const tau = 2 * math.Pi
+
+// 天文计算相关函数
+// juliandate 计算给定时间的儒略日
+func juliandate(t time.Time) float64 {
+	year := t.Year()
+	month := t.Month()
+	// 处理月份调整
+	if month < time.March {
+		year--
+		month += 12
+	}
+	A := int(year / 100)
+	B := 2 - A + int(A/4)
+	C := ((t.Second()+t.Nanosecond()/1e6)/60 + t.Hour()) / 24
+	result := float64(int(365.25*float64(year+4716)+float64(int(30.6001*float64(month+1))))) + float64(t.Day()) + float64(B) - 1524.5 + float64(C)
+	return result
+
+}
+
+// greenwichsrt 计算格林威治恒星时（弧度）
+func greenwichsrt(jd float64) float64 {
+	tUT1 := (jd - 2451545.0) / 36525.0
+
+	gmstSec := 67310.54841 +
+		(876600*3600+8640184.812866)*tUT1 +
+		0.093104*math.Pow(tUT1, 2) -
+		6.2e-6*math.Pow(tUT1, 3)
+
+	gmstRad := gmstSec * tau / 86400.0
+	return math.Mod(gmstRad, tau)
+}
+
+// 生成绕Z轴旋转x弧度的矩阵R3
+func R3(angle float64) [3][3]float64 {
+	cos := math.Cos(angle)
+	sin := math.Sin(angle)
+	return [3][3]float64{
+		{cos, sin, 0},
+		{-sin, cos, 0},
+		{0, 0, 1},
+	}
+}
+
+// 矩阵转置
+func transpose(m [3][3]float64) [3][3]float64 {
+	return [3][3]float64{
+		{m[0][0], m[1][0], m[2][0]},
+		{m[0][1], m[1][1], m[2][1]},
+		{m[0][2], m[1][2], m[2][2]},
+	}
+}
+
+// 乘法运算，矩阵和向量
+func multiplyMatrixVector(m [3][3]float64, v [3]float64) [3]float64 {
+	return [3]float64{
+		m[0][0]*v[0] + m[0][1]*v[1] + m[0][2]*v[2],
+		m[1][0]*v[0] + m[1][1]*v[1] + m[1][2]*v[2],
+		m[2][0]*v[0] + m[2][1]*v[1] + m[2][2]*v[2],
+	}
+}
+
+// ECI2ECEF 将ECI坐标转换为ECEF坐标
+func ECI2ECEF(x, y, z float64, t time.Time) (xEcef, yEcef, zEcef float64) {
+	jd := juliandate(t)
+	gst := greenwichsrt(jd)
+	rotMat := R3(gst)
+	eciVec := [3]float64{x, y, z}
+	ecefVec := multiplyMatrixVector(rotMat, eciVec)
+	return ecefVec[0], ecefVec[1], ecefVec[2]
+}
+
+// ECEF2ECI 将ECEF坐标转换为ECI坐标
+func ECEF2ECI(x, y, z float64, t time.Time) (xEci, yEci, zEci float64) {
+	jd := juliandate(t)
+	gst := greenwichsrt(jd)
+	rotMat := R3(gst)
+	transposed := transpose(rotMat)
+	ecefVec := [3]float64{x, y, z}
+	eciVec := multiplyMatrixVector(transposed, ecefVec)
+	return eciVec[0], eciVec[1], eciVec[2]
 }

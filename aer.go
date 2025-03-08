@@ -55,6 +55,7 @@ func (aer *AER) ToECI(ref Geodetic, t time.Time) ECI {
 		X:   xECI,
 		Y:   yECI,
 		Z:   zECI,
+		T:   t,
 		Ell: aer.Ell,
 	}
 

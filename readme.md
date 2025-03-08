@@ -31,10 +31,14 @@ go get github.com/PingPongCode/gomap3d
 
 ## 使用示例
 
+### 单位
+
+注意，本仓库使用和角度有关系的单位，例如经度、维度、方位、俯仰均为°，长度均为m
+
 ### 基本转换
 
 ```go
-package main
+ package main
 
 import (
 	"fmt"
@@ -43,7 +47,7 @@ import (
 )
 
 func main() {
-	// 创建WGS84椭球体
+	// 创建WGS84椭球体(也可使用cgcs2000)
 	ell, _ := gomap3d.NewEllipsoid("wgs84")
 
 	// 大地坐标（北京）
@@ -111,19 +115,6 @@ func Geodetic2ECEF(lat, lon, alt float64, ell *Ellipsoid) (x, y, z float64) {}
 // ECEF2Geodetic 将ECEF坐标转换为地理坐标
 func ECEF2Geodetic(x, y, z float64, ell *Ellipsoid) (lat, lon, alt float64) {}
 
-// 天文计算相关函数
-// juliandate 计算给定时间的儒略日
-func juliandate(t time.Time) float64 {}
-
-// greenwichsrt 计算格林威治恒星时（弧度）
-func greenwichsrt(jd float64) float64 {}
-
-// rotationMatrix3 生成绕Z轴旋转x弧度的矩阵
-func rotationMatrix3(x float64) [3][3]float64 {}
-
-// multiplyMatrixVector 矩阵乘以向量
-func multiplyMatrixVector(matrix [3][3]float64, vector [3]float64) [3]float64 {}
-
 // ECI2ECEF 将ECI坐标转换为ECEF坐标
 func ECI2ECEF(x, y, z float64, t time.Time) (xEcef, yEcef, zEcef float64) {}
 
@@ -135,13 +126,20 @@ func ECEF2ENU(x, y, z, lat0, lon0, h0 float64, ell *Ellipsoid) (e, n, u float64)
 
 // ENU2ECEF 将ENU坐标转换为ECEF坐标
 func ENU2ECEF(e, n, u, lat0, lon0, h0 float64, ell *Ellipsoid) (x, y, z float64) {}
+
+// 天文计算相关函数
+// juliandate 计算给定时间的儒略日
+func juliandate(t time.Time) float64 {}
+
+// greenwichsrt 计算格林威治恒星时（弧度）
+func greenwichsrt(jd float64) float64 {}
 ```
 
 ## 贡献
 
 欢迎提交Issue和PR。提交代码前请确保：
 
-1. 通过所有测试 `go test -v ./...`
+1. 通过所有测试 `go test .`
 2. 添加新功能的测试用例
 3. 更新相关文档
 
