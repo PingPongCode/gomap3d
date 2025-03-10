@@ -21,7 +21,8 @@ int main() {
               << "Alt: " << geo.alt << "m\n";
 
     // 测试ECI/ECEF转换
-    ECI2ECEF_return ecef = ECI2ECEF(6500000, 100000, 300000, 1717000000);
+    GoFloat64 timestamp =  1717000000; //Unix时间戳 秒 浮点数
+    ECI2ECEF_return ecef = ECI2ECEF(6500000, 100000, 300000, timestamp);
     std::cout << "\nECI2ECEF Result: "
               << "X: " << ecef.xEcef << "m "
               << "Y: " << ecef.yEcef << "m "

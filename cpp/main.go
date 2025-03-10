@@ -207,8 +207,9 @@ const tau = 2 * math.Pi
 // 天文计算相关函数
 
 //export juliandate
-func juliandate(timestamp int64) float64 {
-	t := time.Unix(timestamp, 0)
+func juliandate(timestamp float64) float64 {
+	seconds := int64(timestamp)
+	t := time.Unix(seconds, int64((timestamp-float64(seconds))*1e9))
 	// juliandate 计算给定时间的儒略日
 	year := t.Year()
 	month := t.Month()
@@ -219,7 +220,7 @@ func juliandate(timestamp int64) float64 {
 	}
 	A := int(year / 100)
 	B := 2 - A + int(A/4)
-	C := ((t.Second()+t.Nanosecond()/1e6)/60 + t.Hour()) / 24
+	C := ((t.Second()+t.Nanosecond()/1e9)/60 + t.Hour()) / 24
 	result := float64(int(365.25*float64(year+4716)+float64(int(30.6001*float64(month+1))))) + float64(t.Day()) + float64(B) - 1524.5 + float64(C)
 	return result
 
@@ -269,7 +270,7 @@ func multiplyMatrixVector(m [3][3]float64, v [3]float64) [3]float64 {
 }
 
 //export ECI2ECEF
-func ECI2ECEF(x, y, z float64, timestamp int64) (xEcef, yEcef, zEcef float64) {
+func ECI2ECEF(x, y, z float64, timestamp float64) (xEcef, yEcef, zEcef float64) {
 	// ECI2ECEF 将ECI坐标转换为ECEF坐标
 	jd := juliandate(timestamp)
 	gst := greenwichsrt(jd)
@@ -280,7 +281,7 @@ func ECI2ECEF(x, y, z float64, timestamp int64) (xEcef, yEcef, zEcef float64) {
 }
 
 //export ECEF2ECI
-func ECEF2ECI(x, y, z float64, timestamp int64) (xEci, yEci, zEci float64) {
+func ECEF2ECI(x, y, z float64, timestamp float64) (xEci, yEci, zEci float64) {
 	// ECEF2ECI 将ECEF坐标转换为ECI坐标
 	jd := juliandate(timestamp)
 	gst := greenwichsrt(jd)

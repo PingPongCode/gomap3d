@@ -137,7 +137,7 @@ func juliandate(t time.Time) float64 {
 	}
 	A := int(year / 100)
 	B := 2 - A + int(A/4)
-	C := ((t.Second()+t.Nanosecond()/1e6)/60 + t.Hour()) / 24
+	C := ((t.Second()+t.Nanosecond()/1e9)/60 + t.Hour()) / 24
 	result := float64(int(365.25*float64(year+4716)+float64(int(30.6001*float64(month+1))))) + float64(t.Day()) + float64(B) - 1524.5 + float64(C)
 	return result
 

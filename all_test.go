@@ -42,8 +42,10 @@ func TestCoordinateTransform(t *testing.T) {
 			Altitude:  observation[2],
 		}
 		for j, point := range points {
-			var timestamp int64 = int64(point[0])
-			var tNow = time.Unix(timestamp, 0)
+			var timestampSeconds = int64(point[0])
+			var timestampNsec = int64(((point[0] - float64(timestampSeconds)) * 1e9))
+			var tNow = time.Unix(timestampSeconds, timestampNsec)
+
 			azimuth, elevation, srange := point[1], point[2], point[3]
 			east, north, up := point[4], point[5], point[6]
 			xECEF, yECEF, zECEF := point[7], point[8], point[9]
@@ -116,7 +118,7 @@ func TestCoordinateTransform(t *testing.T) {
 			}
 			if needOut {
 				fmt.Print(
-					"order ", i, "-", j, " timestamp ", timestamp, "\n",
+					"order ", i, "-", j, " timestamp ", point[0], "\n",
 					"azimuth: ", azimuth, aer.Azimuth, aer2.Azimuth, " elevation: ", elevation, aer.Elevation, aer2.Elevation, " srange: ", srange, aer.SRange, aer2.SRange, "\n",
 					"east: ", east, enu.East, enu2.East, " north: ", north, enu.North, enu2.North, " up: ", up, enu.Up, enu2.Up, "\n",
 					"xECEF: ", xECEF, ecef.X, ecef2.X, " yECEF: ", yECEF, ecef.Y, ecef2.Y, " zECEF: ", zECEF, ecef.Z, ecef.Z, "\n",
