@@ -127,18 +127,27 @@ const tau = 2 * math.Pi
 
 // 天文计算相关函数
 // juliandate 计算给定时间的儒略日
+// 基于 Meeus "Astronomical Algorithms" 公式
 func juliandate(t time.Time) float64 {
 	year := t.Year()
 	month := t.Month()
-	// 处理月份调整
+	// 处理月份调整: 1月和2月视为上一年的13月和14月
 	if month < time.March {
 		year--
 		month += 12
 	}
 	A := int(year / 100)
 	B := 2 - A + int(A/4)
-	C := ((t.Second()+t.Nanosecond()/1e9)/60 + t.Hour()) / 24
-	result := float64(int(365.25*float64(year+4716)+float64(int(30.6001*float64(month+1))))) + float64(t.Day()) + float64(B) - 1524.5 + float64(C)
+	// 计算一天内的时间分量 (小数天)
+	hour := float64(t.Hour())
+	minute := float64(t.Minute())
+	second := float64(t.Second())
+	nanosecond := float64(t.Nanosecond())
+	fracDay := (hour*3600.0 + minute*60.0 + second + nanosecond/1e9) / 86400.0
+
+	// 整数日期部分: floor(365.25*(Y+4716)) + floor(30.6001*(M+1)) + D + B - 1524.5
+	intPart := int(365.25*float64(year+4716) + float64(int(30.6001*float64(month+1))))
+	result := float64(intPart) + float64(t.Day()) + float64(B) - 1524.5 + fracDay
 	return result
 
 }

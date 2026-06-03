@@ -52,7 +52,7 @@ func (ecef ECEF) ToAER(ref Geodetic) AER {
 		ecef.X, ecef.Y, ecef.Z,
 		ref.Latitude, ref.Longitude, ref.Altitude,
 		ecef.Ell)
-	srange, azimuth, elevation := ENU2AER(east, north, up)
+	azimuth, elevation, srange := ENU2AER(east, north, up)
 	return AER{
 		Azimuth:   azimuth,
 		Elevation: elevation,

@@ -44,7 +44,7 @@ func TestCoordinateTransform(t *testing.T) {
 		for j, point := range points {
 			var timestampSeconds = int64(point[0])
 			var timestampNsec = int64(((point[0] - float64(timestampSeconds)) * 1e9))
-			var tNow = time.Unix(timestampSeconds, timestampNsec)
+			var tNow = time.Unix(timestampSeconds, timestampNsec).UTC()
 
 			azimuth, elevation, srange := point[1], point[2], point[3]
 			east, north, up := point[4], point[5], point[6]
