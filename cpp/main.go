@@ -305,6 +305,108 @@ func ECEF2ECI(x, y, z float64, timestamp float64) (xEci, yEci, zEci float64) {
 	return eciVec[0], eciVec[1], eciVec[2]
 }
 
+// ===== 速度转换（CGo 导出） =====
+
+const we = 7.2921150e-5 // 地球自转角速度
+
+//export ECEFVel2ECIVel
+func ECEFVel2ECIVel(vx, vy, vz, x, y, z float64, timestamp float64) (vxEci, vyEci, vzEci float64) {
+	jd := juliandate(timestamp)
+	gst := greenwichsrt(jd)
+
+	wxr := [3]float64{-we * y, we * x, 0}
+	v := [3]float64{vx + wxr[0], vy + wxr[1], vz + wxr[2]}
+
+	rotMat := R3(gst)
+	tRot := transpose(rotMat)
+	result := multiplyMatrixVector(tRot, v)
+	return result[0], result[1], result[2]
+}
+
+//export ECIVel2ECEFVel
+func ECIVel2ECEFVel(vx, vy, vz, x, y, z float64, timestamp float64) (vxEcef, vyEcef, vzEcef float64) {
+	jd := juliandate(timestamp)
+	gst := greenwichsrt(jd)
+	rotMat := R3(gst)
+
+	rEci := [3]float64{x, y, z}
+	rEcef := multiplyMatrixVector(rotMat, rEci)
+
+	wxr := [3]float64{-we * rEcef[1], we * rEcef[0], 0}
+	vEci := [3]float64{vx, vy, vz}
+	vRot := multiplyMatrixVector(rotMat, vEci)
+
+	return vRot[0] - wxr[0], vRot[1] - wxr[1], vRot[2] - wxr[2]
+}
+
+//export ENUVel2ECEFVel
+func ENUVel2ECEFVel(eVel, nVel, uVel, latDeg, lonDeg float64) (vx, vy, vz float64) {
+	x0, y0, z0 := Geodetic2ECEF(latDeg, lonDeg, 0, "wgs84")
+	x1, y1, z1 := ENU2ECEF(eVel, nVel, uVel, latDeg, lonDeg, 0, "wgs84")
+	return x1 - x0, y1 - y0, z1 - z0
+}
+
+//export ECEFVel2ENUVel
+func ECEFVel2ENUVel(vx, vy, vz, latDeg, lonDeg float64) (e, n, u float64) {
+	x0, y0, z0 := Geodetic2ECEF(latDeg, lonDeg, 0, "wgs84")
+	e, n, u = ECEF2ENU(x0+vx, y0+vy, z0+vz, latDeg, lonDeg, 0, "wgs84")
+	return
+}
+
+//export AERDeriv2ENUVel
+func AERDeriv2ENUVel(R, azDeg, elDeg, dR, dAzDeg, dElDeg float64) (e, n, u float64) {
+	azRad := azDeg * math.Pi / 180
+	elRad := elDeg * math.Pi / 180
+	dAzRad := dAzDeg * math.Pi / 180
+	dElRad := dElDeg * math.Pi / 180
+
+	cosEl := math.Cos(elRad)
+	sinEl := math.Sin(elRad)
+	cosAz := math.Cos(azRad)
+	sinAz := math.Sin(azRad)
+
+	e = dR*cosEl*sinAz - R*sinEl*dElRad*sinAz + R*cosEl*cosAz*dAzRad
+	n = dR*cosEl*cosAz - R*sinEl*dElRad*cosAz - R*cosEl*sinAz*dAzRad
+	u = dR*sinEl + R*cosEl*dElRad
+	return
+}
+
+//export ENUVel2AERDeriv
+func ENUVel2AERDeriv(eVel, nVel, uVel, R, azDeg, elDeg float64) (dR, dAzDeg, dElDeg float64) {
+	azRad := azDeg * math.Pi / 180
+	elRad := elDeg * math.Pi / 180
+	cosEl := math.Cos(elRad)
+	sinEl := math.Sin(elRad)
+	cosAz := math.Cos(azRad)
+	sinAz := math.Sin(azRad)
+
+	dR = eVel*cosEl*sinAz + nVel*cosEl*cosAz + uVel*sinEl
+
+	if math.Abs(cosEl) > 1e-12 {
+		dElRad := (uVel - dR*sinEl) / (R * cosEl)
+		dElDeg = dElRad * 180 / math.Pi
+		dAzRad := (eVel*cosAz - nVel*sinAz) / (R * cosEl)
+		dAzDeg = dAzRad * 180 / math.Pi
+	}
+	return
+}
+
+//export AERDeriv2ECIVel
+func AERDeriv2ECIVel(R, azDeg, elDeg, dR, dAzDeg, dElDeg, latDeg, lonDeg float64, timestamp float64) (vx, vy, vz float64) {
+	eVel, nVel, uVel := AERDeriv2ENUVel(R, azDeg, elDeg, dR, dAzDeg, dElDeg)
+	vxE, vyE, vzE := ENUVel2ECEFVel(eVel, nVel, uVel, latDeg, lonDeg)
+
+	// 计算 ECEF 位置
+	azRad := azDeg * math.Pi / 180
+	elRad := elDeg * math.Pi / 180
+	px := R * math.Cos(elRad) * math.Sin(azRad)
+	py := R * math.Cos(elRad) * math.Cos(azRad)
+	pz := R * math.Sin(elRad)
+	ex, ey, ez := ENU2ECEF(px, py, pz, latDeg, lonDeg, 0, "wgs84")
+
+	return ECEFVel2ECIVel(vxE, vyE, vzE, ex, ey, ez, timestamp)
+}
+
 func Hello() {
 	fmt.Print("Hello World")
 }

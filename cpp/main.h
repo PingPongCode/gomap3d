@@ -157,6 +157,64 @@ struct ECEF2ECI_return {
 };
 extern __declspec(dllexport) struct ECEF2ECI_return ECEF2ECI(GoFloat64 x, GoFloat64 y, GoFloat64 z, GoInt64 timestamp);
 
+/* ===== 速度转换 ===== */
+
+/* Return type for ECEFVel2ECIVel */
+struct ECEFVel2ECIVel_return {
+	GoFloat64 vxEci;
+	GoFloat64 vyEci;
+	GoFloat64 vzEci;
+};
+extern __declspec(dllexport) struct ECEFVel2ECIVel_return ECEFVel2ECIVel(GoFloat64 vx, GoFloat64 vy, GoFloat64 vz, GoFloat64 x, GoFloat64 y, GoFloat64 z, GoFloat64 timestamp);
+
+/* Return type for ECIVel2ECEFVel */
+struct ECIVel2ECEFVel_return {
+	GoFloat64 vxEcef;
+	GoFloat64 vyEcef;
+	GoFloat64 vzEcef;
+};
+extern __declspec(dllexport) struct ECIVel2ECEFVel_return ECIVel2ECEFVel(GoFloat64 vx, GoFloat64 vy, GoFloat64 vz, GoFloat64 x, GoFloat64 y, GoFloat64 z, GoFloat64 timestamp);
+
+/* Return type for ENUVel2ECEFVel */
+struct ENUVel2ECEFVel_return {
+	GoFloat64 vx;
+	GoFloat64 vy;
+	GoFloat64 vz;
+};
+extern __declspec(dllexport) struct ENUVel2ECEFVel_return ENUVel2ECEFVel(GoFloat64 eVel, GoFloat64 nVel, GoFloat64 uVel, GoFloat64 latDeg, GoFloat64 lonDeg);
+
+/* Return type for ECEFVel2ENUVel */
+struct ECEFVel2ENUVel_return {
+	GoFloat64 e;
+	GoFloat64 n;
+	GoFloat64 u;
+};
+extern __declspec(dllexport) struct ECEFVel2ENUVel_return ECEFVel2ENUVel(GoFloat64 vx, GoFloat64 vy, GoFloat64 vz, GoFloat64 latDeg, GoFloat64 lonDeg);
+
+/* Return type for AERDeriv2ENUVel */
+struct AERDeriv2ENUVel_return {
+	GoFloat64 e;
+	GoFloat64 n;
+	GoFloat64 u;
+};
+extern __declspec(dllexport) struct AERDeriv2ENUVel_return AERDeriv2ENUVel(GoFloat64 R, GoFloat64 azDeg, GoFloat64 elDeg, GoFloat64 dR, GoFloat64 dAzDeg, GoFloat64 dElDeg);
+
+/* Return type for ENUVel2AERDeriv */
+struct ENUVel2AERDeriv_return {
+	GoFloat64 dR;
+	GoFloat64 dAzDeg;
+	GoFloat64 dElDeg;
+};
+extern __declspec(dllexport) struct ENUVel2AERDeriv_return ENUVel2AERDeriv(GoFloat64 eVel, GoFloat64 nVel, GoFloat64 uVel, GoFloat64 R, GoFloat64 azDeg, GoFloat64 elDeg);
+
+/* Return type for AERDeriv2ECIVel */
+struct AERDeriv2ECIVel_return {
+	GoFloat64 vx;
+	GoFloat64 vy;
+	GoFloat64 vz;
+};
+extern __declspec(dllexport) struct AERDeriv2ECIVel_return AERDeriv2ECIVel(GoFloat64 R, GoFloat64 azDeg, GoFloat64 elDeg, GoFloat64 dR, GoFloat64 dAzDeg, GoFloat64 dElDeg, GoFloat64 latDeg, GoFloat64 lonDeg, GoFloat64 timestamp);
+
 #ifdef __cplusplus
 }
 #endif
