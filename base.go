@@ -49,33 +49,36 @@ func Geodetic2ECEF(lat, lon, alt float64, ell *Ellipsoid) (x, y, z float64) {
 }
 
 // ECEF2Geodetic 将ECEF坐标转换为地理坐标
+// 对标 Octave ecef2lla_wgs84 实现：hypot、for 循环、1e-13 容差、收敛后重算高度
 func ECEF2Geodetic(x, y, z float64, ell *Ellipsoid) (lat, lon, alt float64) {
-	// 实现You, Rey-Jer. (2000)算法
-	// 此处简化为迭代法实现
 	a := ell.SemimajorAxis
-	b := ell.SemiminorAxis
-	e2 := (a*a - b*b) / (a * a)
-	eps := 1e-12
+	f := ell.Flattening
+	e2 := f * (2 - f)
 
-	p := math.Sqrt(x*x + y*y)
+	p := math.Hypot(x, y)
 	lon = math.Atan2(y, x)
-
-	// 初始估计
 	lat = math.Atan2(z, p*(1-e2))
 
-	for {
-		n := a / math.Sqrt(1-e2*math.Pow(math.Sin(lat), 2))
+	var i int
+	for i = 0; i < 15; i++ {
+		s := math.Sin(lat)
+		n := a / math.Sqrt(1-e2*s*s)
 		h := p/math.Cos(lat) - n
 
-		latNew := math.Atan(z / p * 1 / (1 - e2*n/(n+h)))
+		latNew := math.Atan2(z, p*(1-e2*n/(n+h)))
 
-		if math.Abs(latNew-lat) < eps {
+		if math.Abs(latNew-lat) < 1e-13 {
 			lat = latNew
 			alt = h
 			break
 		}
 		lat = latNew
 	}
+
+	// 收敛后（或 15 次后）在最终 lat 上重算高度（对标 Octave）
+	s := math.Sin(lat)
+	n := a / math.Sqrt(1 - e2*s*s)
+	alt = p/math.Cos(lat) - n
 
 	lat = lat * 180 / math.Pi
 	lon = lon * 180 / math.Pi
@@ -122,6 +125,15 @@ func ENU2ECEF(e, n, u, lat0, lon0, h0 float64, ell *Ellipsoid) (x, y, z float64)
 	x0, y0, z0 := Geodetic2ECEF(lat0, lon0, h0, ell)
 	return x0 + dx, y0 + dy, z0 + dz
 }
+
+// GMST 模式控制
+// useSimpleGMST 为 true 时，ECI↔ECEF 仅用 Rz(GMST) 旋转，不含岁差章动（对标 Octave 实现）
+var useSimpleGMST = true
+
+// SetGMSTMode 设置是否仅用简单 GMST 旋转（不含岁差章动）
+//   true  = 仅用 Rz(GMST)，对标 Octave/MATLAB Aerospace GMST 模式
+//   false = 完整 IAU-2006/2000B 链（frame bias + 岁差 + 章动 + GAST）
+func SetGMSTMode(simple bool) { useSimpleGMST = simple }
 
 const tau = 2 * math.Pi
 
@@ -194,23 +206,54 @@ func multiplyMatrixVector(m [3][3]float64, v [3]float64) [3]float64 {
 	}
 }
 
-// ECI2ECEF 将ECI坐标转换为ECEF坐标
+// ECI2ECEF 将ECI坐标(GCRF)转换为ECEF坐标(ITRF)
+// 默认仅用简单 GMST 旋转 Rz(GMST)（对标 Octave 实现），
+// 可通过 SetGMSTMode(false) 切换到完整 IAU-2006/2000B 归算链。
 func ECI2ECEF(x, y, z float64, t time.Time) (xEcef, yEcef, zEcef float64) {
 	jd := juliandate(t)
-	gst := greenwichsrt(jd)
-	rotMat := R3(gst)
+
+	var M [3][3]float64
+	if useSimpleGMST {
+		gmst := greenwichsrt(jd)
+		cosG := math.Cos(gmst)
+		sinG := math.Sin(gmst)
+		M = [3][3]float64{
+			{cosG, -sinG, 0},
+			{sinG, cosG, 0},
+			{0, 0, 1},
+		}
+	} else {
+		M = GCRF2ITRF(jd)
+	}
+
 	eciVec := [3]float64{x, y, z}
-	ecefVec := multiplyMatrixVector(rotMat, eciVec)
+	ecefVec := multiplyMatrixVector(M, eciVec)
 	return ecefVec[0], ecefVec[1], ecefVec[2]
 }
 
-// ECEF2ECI 将ECEF坐标转换为ECI坐标
+// ECEF2ECI 将ECEF坐标(ITRF)转换为ECI坐标(GCRF)
+// 默认仅用简单 GMST 旋转（逆变换），
+// 可通过 SetGMSTMode(false) 切换到完整 IAU-2006/2000B 归算链。
 func ECEF2ECI(x, y, z float64, t time.Time) (xEci, yEci, zEci float64) {
 	jd := juliandate(t)
-	gst := greenwichsrt(jd)
-	rotMat := R3(gst)
-	transposed := transpose(rotMat)
+
+	var M [3][3]float64
+	if useSimpleGMST {
+		gmst := greenwichsrt(jd)
+		cosG := math.Cos(gmst)
+		sinG := math.Sin(gmst)
+		// Rz(+GMST): [ct, -st; st, ct; 0, 0, 1]
+		M = [3][3]float64{
+			{cosG, sinG, 0},
+			{-sinG, cosG, 0},
+			{0, 0, 1},
+		}
+	} else {
+		M = GCRF2ITRF(jd)
+		M = transpose(M)
+	}
+
 	ecefVec := [3]float64{x, y, z}
-	eciVec := multiplyMatrixVector(transposed, ecefVec)
+	eciVec := multiplyMatrixVector(M, ecefVec)
 	return eciVec[0], eciVec[1], eciVec[2]
 }

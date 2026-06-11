@@ -15,18 +15,24 @@ const (
 
 // ECEFVel2ECIVel 将 ECEF 速度转换为 ECI 速度。
 //
-// 公式: v_eci = R₃(-GST) · (v_ecef + ω × r_ecef)
-// 其中 ω = [0, 0, We]，r_ecef 由位置 (x, y, z) 给出。
-//
-// 输入:
-//   - vx, vy, vz: ECEF 速度 (m/s)
-//   - x, y, z: ECEF 位置 (m)（用于地球自转修正）
-//   - t: UTC 时间
-//
-// 输出: ECI 速度 (vxEci, vyEci, vzEci) (m/s)
+// 公式: v_eci = M^T · (v_ecef + ω × r_ecef)
+// 默认 M = Rz(GMST)（GMST 模式），SetGMSTMode(false) 后 M = GCRF2ITRF
 func ECEFVel2ECIVel(vx, vy, vz, x, y, z float64, t time.Time) (vxEci, vyEci, vzEci float64) {
 	jd := juliandate(t)
-	gst := greenwichsrt(jd)
+	var M [3][3]float64
+	if useSimpleGMST {
+		gmst := greenwichsrt(jd)
+		cosG := math.Cos(gmst)
+		sinG := math.Sin(gmst)
+		M = [3][3]float64{
+			{cosG, sinG, 0},
+			{-sinG, cosG, 0},
+			{0, 0, 1},
+		}
+	} else {
+		M = GCRF2ITRF(jd)
+		M = transpose(M)
+	}
 
 	// ω × r_ecef
 	wxr := [3]float64{
@@ -42,32 +48,36 @@ func ECEFVel2ECIVel(vx, vy, vz, x, y, z float64, t time.Time) (vxEci, vyEci, vzE
 		vz + wxr[2],
 	}
 
-	// R₃(-GST) · v 即 transpose(R₃(GST)) · v
-	rotMat := R3(gst)
-	tRot := transpose(rotMat)
-	result := multiplyMatrixVector(tRot, v)
+	// M^T · (v_ecef + ω × r_ecef)
+	result := multiplyMatrixVector(M, v)
 	return result[0], result[1], result[2]
 }
 
 // ECIVel2ECEFVel 将 ECI 速度转换为 ECEF 速度。
 //
-// 公式: v_ecef = R₃(GST) · v_eci - ω × r_ecef
-// 其中 r_ecef = R₃(GST) · r_eci
-//
-// 输入:
-//   - vx, vy, vz: ECI 速度 (m/s)
-//   - x, y, z: ECI 位置 (m)（用于计算 r_ecef 和地球自转修正）
-//   - t: UTC 时间
-//
-// 输出: ECEF 速度 (vxEcef, vyEcef, vzEcef) (m/s)
+// 公式: v_ecef = M · v_eci - ω × r_ecef
+// 其中 r_ecef = M · r_eci
+// 默认 M = Rz(GMST)（GMST 模式），SetGMSTMode(false) 后 M = GCRF2ITRF
 func ECIVel2ECEFVel(vx, vy, vz, x, y, z float64, t time.Time) (vxEcef, vyEcef, vzEcef float64) {
 	jd := juliandate(t)
-	gst := greenwichsrt(jd)
-	rotMat := R3(gst)
+	var M [3][3]float64
+	if useSimpleGMST {
+		gmst := greenwichsrt(jd)
+		cosG := math.Cos(gmst)
+		sinG := math.Sin(gmst)
+		// Rz(+GMST)
+		M = [3][3]float64{
+			{cosG, -sinG, 0},
+			{sinG, cosG, 0},
+			{0, 0, 1},
+		}
+	} else {
+		M = GCRF2ITRF(jd)
+	}
 
-	// r_ecef = R₃(GST) · r_eci
+	// r_ecef = M · r_eci
 	rEci := [3]float64{x, y, z}
-	rEcef := multiplyMatrixVector(rotMat, rEci)
+	rEcef := multiplyMatrixVector(M, rEci)
 
 	// ω × r_ecef
 	wxr := [3]float64{
@@ -76,11 +86,11 @@ func ECIVel2ECEFVel(vx, vy, vz, x, y, z float64, t time.Time) (vxEcef, vyEcef, v
 		0,
 	}
 
-	// v_ecef_rot = R₃(GST) · v_eci
+	// v_ecef_rot = M · v_eci
 	vEci := [3]float64{vx, vy, vz}
-	vRot := multiplyMatrixVector(rotMat, vEci)
+	vRot := multiplyMatrixVector(M, vEci)
 
-	// v_ecef = R₃(GST) · v_eci - ω × r_ecef
+	// v_ecef = M · v_eci - ω × r_ecef
 	return vRot[0] - wxr[0], vRot[1] - wxr[1], vRot[2] - wxr[2]
 }
 
@@ -274,14 +284,10 @@ func ECIVel2AERDeriv(vx, vy, vz, Rx, Ry, Rz, latDeg, lonDeg, alt float64, t time
 	ell, _ := NewEllipsoid("wgs84")
 
 	// ECI 位置 → ECEF 位置
-	jd := juliandate(t)
-	gst := greenwichsrt(jd)
-	rotMat := R3(gst)
-	rEci := [3]float64{Rx, Ry, Rz}
-	rEcef := multiplyMatrixVector(rotMat, rEci)
+	rEcefX, rEcefY, rEcefZ := ECI2ECEF(Rx, Ry, Rz, t)
 
 	// ECEF 位置 → ENU 位置（使用实际测站海拔）
-	en, nn, un := ECEF2ENU(rEcef[0], rEcef[1], rEcef[2], latDeg, lonDeg, alt, ell)
+	en, nn, un := ECEF2ENU(rEcefX, rEcefY, rEcefZ, latDeg, lonDeg, alt, ell)
 
 	// ENU 位置 → RAE
 	azDeg, elDeg, srange := ENU2AER(en, nn, un)
